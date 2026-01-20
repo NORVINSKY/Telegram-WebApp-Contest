@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Мисс НИИ "ТЕРПЕНИЯ"</title>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <style>
+        :root {
+            --tg-theme-bg-color: #ffffff;
+            --tg-theme-secondary-bg-color: #f0f0f0;
+            --tg-theme-text-color: #000000;
+            --tg-theme-hint-color: #999999;
+            --tg-theme-button-color: #3390ec;
+            --tg-theme-button-text-color: #ffffff;
+            --safe-area-bottom: env(safe-area-inset-bottom, 20px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--tg-theme-bg-color);
+            color: var(--tg-theme-text-color);
+            overflow: hidden;
+            /* App-like feel */
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Loading Screen */
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: var(--tg-theme-bg-color);
+            z-index: 2000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(128, 128, 128, 0.2);
+            border-left-color: var(--tg-theme-button-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Main Container */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 12px;
+            padding-bottom: var(--safe-area-bottom);
+        }
+
+        /* Header */
+        .header {
+            flex-shrink: 0;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .round-info {
+            font-size: 13px;
+            color: var(--tg-theme-hint-color);
+            font-weight: 500;
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: rgba(128, 128, 128, 0.1);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--tg-theme-button-color);
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Battle Arena - Grid Layout for robustness */
+        .battle-arena {
+            flex-grow: 1;
+            display: grid;
+            grid-template-rows: 1fr 1fr;
+            /* Default mobile: Vertical split */
+            gap: 12px;
+            position: relative;
+            min-height: 0;
+            /* Prevent overflow */
+        }
+
+        @media (min-width: 768px) {
+            .battle-arena {
+                grid-template-rows: 1fr;
+                grid-template-columns: 1fr 1fr;
+                /* Desktop: Side by side */
+            }
+        }
+
+        .candidate-card {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--tg-theme-secondary-bg-color);
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: transform 0.15s ease, opacity 0.3s ease;
+        }
+
+        .candidate-card:active {
+            transform: scale(0.98);
+        }
+
+        .candidate-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .candidate-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 12px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+            color: white;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+        }
+
+        .candidate-name {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .candidate-desc {
+            font-size: 12px;
+            opacity: 0.9;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .comeback-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #ff3b30;
+            color: white;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 4px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 5;
+        }
+
+        /* VS Badge */
+        .vs-badge {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 44px;
+            height: 44px;
+            background: var(--tg-theme-bg-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: var(--tg-theme-hint-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* Comment & Instructions */
+        .controls-section {
+            flex-shrink: 0;
+            padding-top: 16px;
+        }
+
+        .comment-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            background: var(--tg-theme-secondary-bg-color);
+            color: var(--tg-theme-text-color);
+            font-size: 14px;
+            outline: none;
+        }
+
+        .comment-input:focus {
+            border-color: var(--tg-theme-button-color);
+        }
+
+        .tap-hint {
+            text-align: center;
+            font-size: 12px;
+            color: var(--tg-theme-hint-color);
+            margin-top: 8px;
+        }
+
+        /* Victory Screen */
+        .victory-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--tg-theme-bg-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+            z-index: 100;
+        }
+
+        .victory-img {
+            width: 200px;
+            height: 200px;
+            border-radius: 100px;
+            /* Circle */
+            object-fit: cover;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .victory-title {
+            font-size: 24px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            color: var(--tg-theme-button-color);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Loading -->
+    <div id="loadingScreen" class="loading">
+        <div class="spinner"></div>
+        <div style="font-size: 14px; color: var(--tg-theme-hint-color);">Загружаю турнир...</div>
+        <!-- Reset button for emergencies -->
+        <div style="margin-top: 20px; font-size: 12px; text-decoration: underline; opacity: 0.5; cursor: pointer;"
+            onclick="game.hardReset()">Перезагрузить</div>
+    </div>
+
+    <!-- Victory Screen -->
+    <div id="victoryScreen" class="victory-screen hidden">
+        <img id="victoryImage" class="victory-img" src="" alt="">
+        <div class="victory-title" id="victoryTitle">Победитель!</div>
+        <div id="victoryName" style="font-size: 20px; font-weight: 600; margin-bottom: 12px;"></div>
+        <div style="font-size: 14px; color: var(--tg-theme-hint-color);">
+            Спасибо за участие.<br>Твой голос очень важен для нас!
+        </div>
+    </div>
+
+    <!-- Game UI -->
+    <div id="gameScreen" class="app-container hidden">
+        <div class="header">
+            <h1>Мисс НИИ "ТЕРПЕНИЯ"</h1>
+            <div class="round-info">
+                Круг <span id="roundNumber">1</span> <span style="opacity: 0.5;">/ <span
+                        id="totalRounds">--</span></span>
+            </div>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="battle-arena">
+            <!-- Candidate 1 -->
+            <div class="candidate-card" id="candidate1Card">
+                <img class="candidate-image" id="candidate1Image" src="" alt=""
+                    onerror="this.onerror=null; setTimeout(() => { this.src = this.src.split('?')[0] + '?retry=' + Date.now(); }, 500);">
+                <div class="candidate-info">
+                    <div class="candidate-name" id="candidate1Name">Name 1</div>
+                    <div class="candidate-desc" id="candidate1Desc">Description</div>
+                </div>
+                <div class="comeback-badge hidden" id="candidate1Comeback">Мисс Фортуна</div>
+            </div>
+
+            <!-- Candidate 2 -->
+            <div class="candidate-card" id="candidate2Card">
+                <img class="candidate-image" id="candidate2Image" src="" alt=""
+                    onerror="this.onerror=null; setTimeout(() => { this.src = this.src.split('?')[0] + '?retry=' + Date.now(); }, 500);">
+                <div class="candidate-info">
+                    <div class="candidate-name" id="candidate2Name">Name 2</div>
+                    <div class="candidate-desc" id="candidate2Desc">Description</div>
+                </div>
+                <div class="comeback-badge hidden" id="candidate2Comeback">Мисс Фортуна</div>
+            </div>
+
+            <div class="vs-badge">VS</div>
+        </div>
+
+        <div class="controls-section">
+            <input type="text" class="comment-input" id="commentInput" placeholder="Почему так..?" maxlength="200">
+            <div class="tap-hint">Жми на фото, чтоб отдать голос</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api.php';
+
+        // Game Logic Class - Queue Based
+        class Game {
+            constructor() {
+                this.state = {
+                    queue: [],          // Candidates waiting to fight in CURRENT round
+                    nextRound: [],      // Winners waiting for NEXT round
+                    losers: [],         // Losers of CURRENT round (for lucky loser)
+                    currentPair: null,  // { c1, c2 } currently on screen
+
+                    roundNum: 1,
+                    sessionId: null,
+                    voteCount: 0,
+                    totalCandidates: 0,
+                    candidates: []      // All candidates (reference)
+                };
+                this.initData = '';
+            }
+
+            async init() {
+                try {
+                    // Telegram Init
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        const tg = window.Telegram.WebApp;
+                        tg.expand();
+                        this.initData = tg.initData || this.getMockInitData();
+
+                        document.documentElement.style.setProperty('--tg-theme-bg-color', tg.themeParams.bg_color || '#ffffff');
+                        document.documentElement.style.setProperty('--tg-theme-text-color', tg.themeParams.text_color || '#000000');
+                        document.documentElement.style.setProperty('--tg-theme-button-color', tg.themeParams.button_color || '#3390ec');
+                        document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', tg.themeParams.secondary_bg_color || '#f0f0f0');
+                    } else {
+                        this.initData = this.getMockInitData();
+                    }
+
+                    // Pre-check for corruption or completion
+                    // Use POST to avoid URL length limits with initData
+                    const userStatus = await this.api('get_user_stats', { initData: this.initData }, 'POST');
+
+                    if (userStatus.tournament_completed) {
+                        this.showVictoryScreen(null, true);
+                        return;
+                    }
+
+                    // Helper to start fresh
+                    const startNew = async (forceReset = false) => {
+                        console.log("Starting new session...", forceReset ? "(FORCED)" : "");
+
+                        const session = await this.api('start_tournament', {
+                            initData: this.initData,
+                            reset: forceReset
+                        }, 'POST');
+
+                        this.state.sessionId = session.session_id;
+                        this.state.voteCount = 0;
+
+                        // Load Candidates
+                        const data = await this.api('get_candidates');
+                        if (!data || !Array.isArray(data.candidates)) {
+                            throw new Error("Failed to load candidates");
+                        }
+
+                        this.state.candidates = data.candidates;
+                        this.state.totalCandidates = data.candidates.length;
+                        this.state.roundMap = this.calculateRoundMap(data.candidates.length);
+                        this.state.totalRounds = this.state.roundMap.length;
+
+                        this.state.queue = [...data.candidates];
+                        this.shuffle(this.state.queue);
+
+                        // Reset other state
+                        this.state.nextRound = [];
+                        this.state.losers = [];
+                        this.state.currentPair = null;
+                        this.state.roundNum = 1;
+
+                        this.save();
+                    };
+
+                    // Attempt to restore
+                    if (userStatus.session_id) {
+                        const session = await this.api('start_tournament', { initData: this.initData }, 'POST');
+                        this.state.sessionId = session.session_id;
+
+                        if (session.session_data) {
+                            const saved = session.session_data;
+
+                            // Restore
+                            if (saved.queue) this.state.queue = saved.queue;
+                            if (saved.nextRound) this.state.nextRound = saved.nextRound;
+                            if (saved.losers) this.state.losers = saved.losers;
+                            if (saved.currentPair) this.state.currentPair = saved.currentPair;
+                            if (saved.roundNum) this.state.roundNum = saved.roundNum;
+                            // Stats
+                            if (saved.totalCandidates) this.state.totalCandidates = saved.totalCandidates;
+                            if (saved.candidates) this.state.candidates = saved.candidates;
+                            if (saved.voteCount) this.state.voteCount = saved.voteCount;
+
+                            // Recalculate totals
+                            this.state.totalRounds = this.calculateTotalRounds(this.state.totalCandidates);
+                            // Pre-calculate round boundaries
+                            this.state.roundMap = this.calculateRoundMap(this.state.totalCandidates);
+
+                            // Self-Correction: If voteCount is 0, we MUST be in Round 1.
+                            if (this.state.voteCount === 0) {
+                                this.state.roundNum = 1;
+                            }
+
+                            // Corruption Check
+                            if (this.isStateCorrupted()) {
+                                console.warn("Corrupted State Detected! Resetting...");
+                                await startNew(true);
+                            }
+                        } else {
+                            await startNew();
+                        }
+                    } else {
+                        await startNew();
+                    }
+
+
+
+                    // FINAL SAFETY CHECK: Ensure candidates are loaded
+                    // This handles the case where get_user_stats created an empty session
+                    if (!this.state.candidates || !Array.isArray(this.state.candidates) || this.state.candidates.length === 0) {
+                        console.log("Loading missing candidates list (Safety Check)...");
+                        const data = await this.api('get_candidates');
+                        this.state.candidates = data.candidates;
+                        this.state.totalCandidates = data.candidates.length;
+
+                        // IMPORTANT: Recalculate rounds because we started with 0 candidates
+                        this.state.roundMap = this.calculateRoundMap(this.state.totalCandidates);
+                        this.state.totalRounds = this.state.roundMap.length;
+
+                        // IMPORTANT: Initialize queue if empty
+                        if (this.state.queue.length === 0) {
+                            this.state.queue = [...this.state.candidates];
+                            this.shuffle(this.state.queue);
+                        }
+
+                        // Save the corrected state immediately so next refresh is fast
+                        this.save();
+                    }
+
+                    // Remove loading
+                    $('#loadingScreen').addClass('hidden');
+                    $('#gameScreen').removeClass('hidden');
+
+                    this.processQueue();
+
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                    console.error(e);
+                    // Force reset button to be visible or something
+                }
+            }
+
+            isStateCorrupted() {
+                const s = this.state;
+                // Check 1: Identical Pair
+                if (s.currentPair && s.currentPair.c1 && s.currentPair.c2) {
+                    if (s.currentPair.c1.id === s.currentPair.c2.id) return true;
+                }
+                // Check 2: Infinite Match Count
+                if (s.totalCandidates > 0 && s.voteCount > s.totalCandidates * 2) return true;
+
+                // Check 3: Empty queue and nextRound but not finished
+                // (Handled effectively by processQueue logic, but good as a check)
+
+                return false;
+            }
+
+            // Core Logic: Process the queue to determine what to show
+            processQueue() {
+                // 1. If we already have a pair on screen, just show it
+                if (this.state.currentPair) {
+                    this.renderPair(this.state.currentPair.c1, this.state.currentPair.c2);
+                    return;
+                }
+
+                // 2. If queue has >= 2 items, pick top 2
+                if (this.state.queue.length >= 2) {
+                    const c1 = this.state.queue.shift();
+                    const c2 = this.state.queue.shift();
+                    this.state.currentPair = { c1, c2 };
+                    this.save(); // Save state immediately
+                    this.renderPair(c1, c2);
+                    return;
+                }
+
+                // 3. If queue has 1 item (Lone Wolf)
+                if (this.state.queue.length === 1) {
+                    const c1 = this.state.queue.shift();
+
+                    // Try to find a Lucky Loser
+                    if (this.state.losers.length > 0) {
+                        const luckyIdx = Math.floor(Math.random() * this.state.losers.length);
+                        const c2 = this.state.losers.splice(luckyIdx, 1)[0]; // Remove from losers pool
+                        c2.is_comeback = true;
+
+                        // Sanity check: prevent C1 vs C1
+                        if (c1.id === c2.id) {
+                            this.state.nextRound.push(c1);
+                            this.processQueue();
+                            return;
+                        }
+
+                        this.state.currentPair = { c1, c2 };
+                        this.save();
+                        this.renderPair(c1, c2);
+                        return;
+                    } else {
+                        // No losers available -> Auto advance
+                        this.state.nextRound.push(c1);
+                        this.processQueue(); // recurse
+                        return;
+                    }
+                }
+
+                // 4. Queue is empty. Round Over.
+                if (this.state.queue.length === 0) {
+                    // Check for Winner
+                    if (this.state.nextRound.length === 1) {
+                        this.complete(this.state.nextRound[0]);
+                        return;
+                    }
+
+                    // Start Next Round
+                    if (this.state.nextRound.length === 0) {
+                        // Error protection: should not happen if logic is correct.
+                        // But if it does, let's reset to all candidates to allow recovering
+                        if (this.state.candidates.length > 0) {
+                            this.state.nextRound = [...this.state.candidates];
+                            this.shuffle(this.state.nextRound);
+                        } else {
+                            alert("Tournament Error: No candidates left.");
+                            return;
+                        }
+                    }
+
+                    this.state.roundNum++;
+                    this.state.queue = [...this.state.nextRound]; // Winners become new queue
+                    this.state.nextRound = [];
+                    this.state.losers = [];
+                    this.state.currentPair = null;
+
+                    this.shuffle(this.state.queue);
+                    this.processQueue();
+                    return;
+                }
+            }
+
+            // Preload image with retry logic
+            preloadImage(url, retries = 3) {
+                return new Promise((resolve, reject) => {
+                    const attemptLoad = (attempt) => {
+                        const img = new Image();
+
+                        img.onload = () => resolve(url);
+
+                        img.onerror = () => {
+                            if (attempt < retries) {
+                                console.warn(`Image load failed (attempt ${attempt}/${retries}): ${url}`);
+                                // Add cache-busting parameter and retry
+                                setTimeout(() => {
+                                    const retryUrl = url + (url.includes('?') ? '&' : '?') + '_r=' + Date.now();
+                                    attemptLoad(attempt + 1);
+                                }, 500 * attempt); // Exponential backoff
+                            } else {
+                                console.error(`Image load failed after ${retries} attempts: ${url}`);
+                                reject(new Error('Image load failed'));
+                            }
+                        };
+
+                        // Add cache-busting on retries
+                        if (attempt > 1) {
+                            img.src = url + (url.includes('?') ? '&' : '?') + '_r=' + Date.now();
+                        } else {
+                            img.src = url;
+                        }
+                    };
+
+                    attemptLoad(1);
+                });
+            }
+
+            async renderPair(c1, c2) {
+                // Hide cards during loading
+                $('#candidate1Card').css('opacity', '0.5');
+                $('#candidate2Card').css('opacity', '0.5');
+
+                // Preload both images in parallel
+                const loadPromises = [
+                    this.preloadImage(c1.image_url).catch(() => null),
+                    this.preloadImage(c2.image_url).catch(() => null)
+                ];
+
+                // Wait for both to complete (or fail)
+                const [img1Loaded, img2Loaded] = await Promise.all(loadPromises);
+
+                // Render C1
+                $('#candidate1Name').text(c1.name);
+                $('#candidate1Desc').text(c1.description || '');
+                if (img1Loaded) {
+                    $('#candidate1Image').attr('src', c1.image_url);
+                } else {
+                    // Use a placeholder or retry with timestamp
+                    $('#candidate1Image').attr('src', c1.image_url + '?t=' + Date.now());
+                }
+                $('#candidate1Comeback').toggleClass('hidden', !c1.is_comeback);
+
+                // Render C2
+                $('#candidate2Name').text(c2.name);
+                $('#candidate2Desc').text(c2.description || '');
+                if (img2Loaded) {
+                    $('#candidate2Image').attr('src', c2.image_url);
+                } else {
+                    // Use a placeholder or retry with timestamp
+                    $('#candidate2Image').attr('src', c2.image_url + '?t=' + Date.now());
+                }
+                $('#candidate2Comeback').toggleClass('hidden', !c2.is_comeback);
+
+                // Fade cards back in
+                $('#candidate1Card').css('opacity', '1');
+                $('#candidate2Card').css('opacity', '1');
+
+                // Update Progress
+                // Calculate TRUE round based on votes
+                let currentRound = this.getCurrentRound(this.state.voteCount, this.state.roundMap);
+                this.state.roundNum = currentRound;
+
+                $('#roundNumber').text(currentRound);
+
+                // Total Rounds Calculation
+                if (!this.state.totalRounds || this.state.totalRounds === 0) {
+                    this.state.totalRounds = this.calculateTotalRounds(this.state.totalCandidates);
+                }
+                $('#totalRounds').text(this.state.totalRounds);
+
+                // Progress Bar based on rounds
+                const pct = Math.min(100, ((currentRound - 1) / this.state.totalRounds) * 100);
+                $('#progressFill').css('width', Math.max(5, pct) + '%');
+            }
+
+            async vote(choice) {
+                if (!this.state.currentPair) return;
+
+                const { c1, c2 } = this.state.currentPair;
+                const winner = choice === 1 ? c1 : c2;
+                const loser = choice === 1 ? c2 : c1;
+
+                // Logic
+                this.state.voteCount++;
+                delete winner.is_comeback;
+
+                this.state.nextRound.push(winner);
+                this.state.losers.push(loser);
+
+                this.state.currentPair = null;
+
+                // UI
+                const comment = $('#commentInput').val().trim();
+                $('#commentInput').val('');
+
+                // API
+
+                // Fire and forget (mostly)
+                this.api('vote', {
+                    initData: this.initData,
+                    session_id: this.state.sessionId,
+                    winner_id: winner.id,
+                    loser_id: loser.id,
+                    vote_order: this.state.voteCount,
+                    comment: comment
+                }, 'POST');
+
+                // Save state
+                this.save();
+
+                // Next
+                this.processQueue();
+            }
+
+            async complete(winner) {
+                try {
+                    await this.api('complete_tournament', {
+                        initData: this.initData,
+                        session_id: this.state.sessionId,
+                        comment: ''
+                    }, 'POST');
+
+                    this.showVictoryScreen(winner, false);
+                } catch (e) {
+                    console.error(e);
+                    this.showVictoryScreen(winner, false);
+                }
+            }
+
+            showVictoryScreen(winner, alreadyVoted) {
+                $('#loadingScreen').addClass('hidden');
+                $('#gameScreen').addClass('hidden');
+                $('#victoryScreen').removeClass('hidden');
+
+                if (alreadyVoted) {
+                    $('#victoryTitle').text('Выбор сделан');
+                    $('#victoryImage').hide();
+                    $('#victoryName').html('Ты уже голосовал.<br>Теперь жди результатов!');
+                } else {
+                    $('#victoryTitle').text('Победитель!');
+                    $('#victoryImage').attr('src', winner.image_url).show();
+                    $('#victoryName').text(winner.name);
+                }
+            }
+
+            save() {
+                this.api('save_tournament_state', {
+                    initData: this.initData,
+                    session_id: this.state.sessionId,
+                    state: this.state
+                }, 'POST');
+            }
+
+            async api(action, data = null, method = 'GET') {
+                let url = `${API_BASE}?action=${action}`;
+                // POST method preferred for commands carrying initData to avoid URL length issues
+
+                if (method === 'GET' && data) {
+                    url += '&' + $.param(data);
+                }
+
+                return $.ajax({
+                    url: url,
+                    method: method,
+                    contentType: 'application/json',
+                    data: method === 'POST' ? JSON.stringify(data) : undefined,
+                    dataType: 'json'
+                }).then(res => {
+                    if (res.error) throw new Error(res.error);
+                    if (!res.success && !res.candidates && !res.pair && !res.session_id) throw new Error('Unknown API Error');
+                    return res;
+                }).catch(err => {
+                    // Extract meaningful error message from jqXHR
+                    let msg = 'Network/Server Error';
+                    if (err.responseJSON && err.responseJSON.error) {
+                        msg = err.responseJSON.error;
+                    } else if (err.responseText) {
+                        // Try to parse text if it's JSON
+                        try {
+                            const json = JSON.parse(err.responseText);
+                            if (json.error) msg = json.error;
+                        } catch (e) {
+                            // If not JSON, maybe just HTML error page (limit length)
+                            msg = err.responseText.substring(0, 100);
+                        }
+                    } else if (err.statusText) {
+                        msg = err.statusText;
+                    } else if (err.message) {
+                        msg = err.message;
+                    }
+                    throw new Error(msg);
+                });
+            }
+
+            shuffle(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            // Расчёт границ раундов на основе количества участников
+            calculateRoundMap(numCandidates) {
+                if (numCandidates <= 1) return [0];
+
+                let map = [];
+                let cumulativeMatches = 0;
+                let q = numCandidates;
+                let losersPool = 0;
+
+                let loopCount = 0;
+                while (q > 1 && loopCount < 20) {
+                    loopCount++;
+                    let matchesInThisRound = 0;
+
+                    // Парные бои
+                    let pairs = Math.floor(q / 2);
+                    matchesInThisRound += pairs;
+                    losersPool += pairs;
+                    q = pairs;
+
+                    // Если остался 1 участник без пары
+                    if (q * 2 < (q * 2 + (q % 2 === 1 ? 1 : 0))) {
+                        let remaining = (pairs * 2 < numCandidates) ? 1 : 0;
+                        if (remaining === 1 && losersPool > 0) {
+                            // Lucky Loser бой
+                            matchesInThisRound += 1;
+                            losersPool -= 1;
+                            losersPool += 1;
+                            q += 1;
+                        } else if (remaining === 1) {
+                            // Проходит без боя
+                            q += 1;
+                        }
+                    }
+
+                    cumulativeMatches += matchesInThisRound;
+                    map.push(cumulativeMatches);
+
+                    numCandidates = q;
+                }
+
+                return map;
+            }
+
+            // Определение текущего раунда по количеству голосов
+            getCurrentRound(voteCount, roundMap) {
+                if (!roundMap || roundMap.length === 0) return 1;
+
+                // voteCount = 0 означает начало, это Round 1
+                for (let i = 0; i < roundMap.length; i++) {
+                    if (voteCount < roundMap[i]) {
+                        return i + 1;
+                    }
+                }
+
+                // Все матчи завершены
+                return roundMap.length;
+            }
+
+            calculateTotalRounds(numCandidates) {
+                const map = this.calculateRoundMap(numCandidates);
+                return map.length;
+            }
+
+            async hardReset() {
+                if (!confirm("Reset current tournament progress?")) return;
+                $('#loadingScreen').removeClass('hidden');
+                try {
+                    await this.api('start_tournament', { initData: this.initData, reset: true }, 'POST');
+                    // Force reload to ensure fresh state
+                    window.location.reload();
+                } catch (e) {
+                    alert("Reset failed: " + e.message);
+                    window.location.reload();
+                }
+            }
+
+            getMockInitData() {
+                return 'user=%7B%22id%22%3A1%2C%22first_name%22%3A%22Test%22%7D&auth_date=' + Math.floor(Date.now() / 1000) + '&hash=test';
+            }
+        }
+
+        const game = new Game();
+        $(document).ready(() => game.init());
+
+        $('#candidate1Card').click(() => game.vote(1));
+        $('#candidate2Card').click(() => game.vote(2));
+
+        // Expose for reset button
+        window.game = game;
+
+    </script>
+
+</body>
+
+</html>
